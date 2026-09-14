@@ -11,6 +11,7 @@ const productSchema = new mongoose.Schema(
     description: {
       type: String,
       required: true,
+      trim: true,
     },
 
     price: {
@@ -22,11 +23,13 @@ const productSchema = new mongoose.Schema(
     category: {
       type: String,
       required: true,
+      trim: true,
     },
 
     brand: {
       type: String,
       required: true,
+      trim: true,
     },
 
     stock: {
