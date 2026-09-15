@@ -1,5 +1,5 @@
 import express from "express";
-import productRoutes from "./routes/productRoutes.js";
+import productRoutes from "./routes/product-route.js";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
 import authRoute from "./routes/auth-route.js";
