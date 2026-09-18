@@ -1,28 +1,17 @@
 import Cart from "../models/cart.model.js";
 import Product from "../models/products.model.js";
 import Order from "../models/order.model.js";
+import mongoose from "mongoose";
 
 export const createOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
     const userId = req.user.userId;
     const { shippingAddress, paymentMethod } = req.body;
     const cart = await Cart.findOne({
       user: userId,
     });
-
-    if (!cart) {
-      return res.satus(404).json({
-        success: false,
-        message: "cart not found",
-      });
-    }
-
-    if (cart.items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "cart is empty",
-      });
-    }
 
     if (!["COD", "ONLINE"].includes(paymentMethod)) {
       return res.status(400).json({
@@ -46,51 +35,98 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    let orderItems = [];
-    let totalAmount = 0;
+    let createdOrder;
 
-    for (const item of cart.items) {
-      const product = await Product.findById(item.product);
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          message: "Product not found",
-        });
+
+      await session.withTransaction(async () => {
+      const cart = await Cart.findOne({
+        user: userId,
+      }).session(session);
+
+      if (!cart) {
+        const error = new Error("Cart not found");
+        error.statusCode = 404;
+        throw error;
       }
 
-      if (item.quantity > product.stock) {
-        return res.status(400).json({
-          success: false,
-          message: `${product.name} does not have enough stock`,
-        });
+      if (cart.items.length === 0) {
+        const error = new Error("Cart is empty");
+        error.statusCode = 400;
+        throw error;
       }
 
-      const subTotal = product.price * item.quantity;
+      const orderItems = [];
+      let totalAmount = 0;
 
-      orderItems.push({
-        product: product._id,
-        quantity: item.quantity,
-        price: product.price,
-        subTotal,
-      });
-      totalAmount += subTotal;
-    }
+      for (const item of cart.items) {
+        const product = await Product.findById(item.product).session(session);
 
-    const order = await Order.create({
-      user: userId,
-      items: orderItems,
-      totalAmount,
-      shippingAddress,
-      paymentMethod,
+        if (!product) {
+          const error = new Error("Product not found");
+          error.statusCode = 404;
+          throw error;
+        }
+
+        const updatedProduct = await Product.findOneAndUpdate(
+          {
+            _id: product._id,
+            stock: { $gte: item.quantity },
+          },
+          {
+            $inc: {
+              stock: -item.quantity,
+            },
+          },
+          {
+            returnDocument: 'after',
+            session,
+          }
+        );
+
+        if (!updatedProduct) {
+          const error = new Error(
+            `${product.name} does not have enough stock`
+          );
+          error.statusCode = 400;
+          throw error;
+        }
+
+        const subTotal = product.price * item.quantity;
+
+        orderItems.push({
+          product: product._id,
+          quantity: item.quantity,
+          price: product.price,
+          subTotal,
+        });
+
+        totalAmount += subTotal;
+      }
+
+      const orders = await Order.create(
+        [
+          {
+            user: userId,
+            items: orderItems,
+            totalAmount,
+            shippingAddress,
+            paymentMethod,
+          },
+        ],
+        { session }
+      );
+
+      createdOrder = orders[0];
+
+      cart.items = [];
+
+      await cart.save({ session });
     });
-
-    cart.items = [];
-    await cart.save();
 
     return res.status(201).json({
       success: true,
       message: "Order created successfully",
-      order,
+      order: createdOrder,
     });
     
   } catch (error) {
