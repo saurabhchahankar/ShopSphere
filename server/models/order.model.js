@@ -27,7 +27,7 @@ const orderSchema = new mongoose.Schema(
           min: 0,
         },
 
-        subtotal: {
+        subTotal: {
           type: Number,
           required: true,
           min: 0,
