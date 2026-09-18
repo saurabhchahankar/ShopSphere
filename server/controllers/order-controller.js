@@ -150,10 +150,55 @@ export const getMyOrders = async (req, res) => {
     });
   } catch (error) {
     console.error("Get my Order Error: ", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "some thing went wrong while getting Orders",
     });
   }
 };
+
+export const getSingleOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.userId;
+    
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message:'Order Id is required'
+      })
+    };
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID",
+      });
+    };
+
+    const order = await Order.findOne({
+      _id: orderId,
+      user: userId,
+    }).populate("items.product", "name image");
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message:"Order is not Found"
+      })
+    };
+
+     return res.status(200).json({
+      success: true,
+      order,
+    });
+    
+  } catch (error) {
+    console.error("Get Single Order Error: ", error)
+   return res.status(500).json({
+      success: false,
+      message:"some thing went wrong while getting single order"
+    })
+  }
+}
 
