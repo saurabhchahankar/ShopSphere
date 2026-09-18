@@ -37,8 +37,7 @@ export const createOrder = async (req, res) => {
 
     let createdOrder;
 
-
-      await session.withTransaction(async () => {
+    await session.withTransaction(async () => {
       const cart = await Cart.findOne({
         user: userId,
       }).session(session);
@@ -78,15 +77,13 @@ export const createOrder = async (req, res) => {
             },
           },
           {
-            returnDocument: 'after',
+            returnDocument: "after",
             session,
-          }
+          },
         );
 
         if (!updatedProduct) {
-          const error = new Error(
-            `${product.name} does not have enough stock`
-          );
+          const error = new Error(`${product.name} does not have enough stock`);
           error.statusCode = 400;
           throw error;
         }
@@ -113,7 +110,7 @@ export const createOrder = async (req, res) => {
             paymentMethod,
           },
         ],
-        { session }
+        { session },
       );
 
       createdOrder = orders[0];
@@ -128,7 +125,6 @@ export const createOrder = async (req, res) => {
       message: "Order created successfully",
       order: createdOrder,
     });
-    
   } catch (error) {
     console.error("Create Order Error ", error);
     res.status(500).json({
@@ -137,3 +133,27 @@ export const createOrder = async (req, res) => {
     });
   }
 };
+
+export const getMyOrders = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const orders = await Order.find({
+      user: userId,
+    })
+      .populate("items.product", "name image")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: orders.length,
+      orders,
+    });
+  } catch (error) {
+    console.error("Get my Order Error: ", error);
+    res.status(500).json({
+      success: false,
+      message: "some thing went wrong while getting Orders",
+    });
+  }
+};
+
