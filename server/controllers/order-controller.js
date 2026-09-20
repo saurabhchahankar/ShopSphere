@@ -161,20 +161,20 @@ export const getSingleOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
     const userId = req.user.userId;
-    
+
     if (!orderId) {
       return res.status(400).json({
         success: false,
-        message:'Order Id is required'
-      })
-    };
+        message: "Order Id is required",
+      });
+    }
 
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       return res.status(400).json({
         success: false,
         message: "Invalid order ID",
       });
-    };
+    }
 
     const order = await Order.findOne({
       _id: orderId,
@@ -184,21 +184,214 @@ export const getSingleOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message:"Order is not Found"
-      })
-    };
+        message: "Order is not Found",
+      });
+    }
 
-     return res.status(200).json({
+    return res.status(200).json({
       success: true,
       order,
     });
-    
   } catch (error) {
-    console.error("Get Single Order Error: ", error)
-   return res.status(500).json({
+    console.error("Get Single Order Error: ", error);
+    return res.status(500).json({
       success: false,
-      message:"some thing went wrong while getting single order"
-    })
+      message: "some thing went wrong while getting single order",
+    });
   }
-}
+};
 
+export const cancelledOrder = async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.userId;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order Id is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order Id",
+      });
+    }
+
+    let cancelledOrder;
+    await session.withTransaction(async () => {
+      const order = await Order.findOne({
+        _id: orderId,
+        user: userId,
+      }).session(session);
+
+      if (!order) {
+        const error = new Error("Order Not Found");
+        error.statusCode = 404;
+        throw error;
+      }
+      if (!["pending", "confirmed"].includes(order.orderStatus)) {
+        const error = new Error(
+          `Order cannot be cancelled because its current status is ${order.orderStatus}`,
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      for (const item of order.items) {
+        const product = await Product.findById(item.product).session(session);
+
+        if (!product) {
+          const error = new Error("Product associated with order not found");
+          error.statusCode = 404;
+          throw error;
+        }
+
+        product.stock += item.quantity;
+        await product.save({ session });
+      }
+      order.orderStatus = "cancelled";
+      await order.save({ session });
+      cancelledOrder = order;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully",
+      order: cancelledOrder,
+    });
+  } catch (error) {
+    console.error("Cancelled Order Error: ", error.message);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: "something went wrong while cancelling order",
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
+// admin controller
+
+export const getAllOrders = async (req, res) => {
+  try {
+    const orders = await Order.find()
+      .populate("user", "name email")
+      .populate("items.product", "name image")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      count: orders.length,
+      orders,
+    });
+  } catch (error) {
+    console.error("Get All Orders Error: ", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "something went wrong while Getting all orders ",
+    });
+  }
+};
+
+export const updateOrderStatus = async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID",
+      });
+    }
+    const validStatuses = [
+      "pending",
+      "confirmed",
+      "processing",
+      "shipped",
+      "delivered",
+      "cancelled",
+    ];
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Order Status",
+      });
+    }
+
+    let updatedOrder;
+
+    await session.withTransaction(async () => {
+      const order = await Order.findById(orderId).session(session);
+      if (!order) {
+        const error = new Error("Order Not Found");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      const allowTransition = {
+        pending: ["confirmed", "cancelled"],
+        confirmed: ["processing", "cancelled"],
+        processing: ["shipped"],
+        shipped: ["delivered"],
+        delivered: [],
+        cancelled: [],
+      };
+
+      if (!allowTransition[order.orderStatus].includes(status)) {
+        const error = new Error(
+          `Cannot change order status from ${order.orderStatus} to ${status}`,
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // If admin cancels the order, return items to stock.
+
+      if (status === "cancelled") {
+        for (const item of order.items) {
+          const product = await Product.findById(item.product).session(session);
+
+          if (!product) {
+            const error = new Error("Product associated with order not found");
+            error.statusCode = 404;
+            throw error;
+          }
+          product.stock += item.quantity;
+          await product.save({ session });
+        }
+      }
+      order.orderStatus = status;
+      await order.save({ session });
+      updatedOrder = order;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Order status updated successfully",
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error("Update Order Status Error:", error.message);
+
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Something went wrong",
+    });
+  } finally {
+    await session.endSession();
+  }
+};
