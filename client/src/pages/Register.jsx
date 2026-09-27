@@ -46,9 +46,9 @@ const Register = () => {
   }
   return (
     <main className="min-h-[calc(100vh-72px)] bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mx-auto grid min-h-[650px] w-full max-w-6xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl md:grid-cols-2">
+      <section className="mx-auto grid min-h-162.5 w-full max-w-6xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl md:grid-cols-2">
         {/* Left side */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-700 px-6 py-10 text-white sm:px-10 sm:py-14 lg:px-14">
+        <div className="relative overflow-hidden bg-linear-to-br from-slate-950 via-indigo-950 to-violet-700 px-6 py-10 text-white sm:px-10 sm:py-14 lg:px-14">
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10" />
           <div className="absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-white/5" />
 
@@ -217,7 +217,7 @@ const Register = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-xl bg-linear-to-r from-violet-600 to-indigo-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-violet-500/25 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? "Creating account..." : "Create account"}
               </button>
